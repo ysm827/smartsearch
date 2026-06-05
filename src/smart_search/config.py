@@ -31,6 +31,8 @@ class Config:
         "SMART_SEARCH_VALIDATION_LEVEL",
         "SMART_SEARCH_FALLBACK_MODE",
         "SMART_SEARCH_MINIMUM_PROFILE",
+        "SMART_SEARCH_RESEARCH_PREFERRED_PROVIDERS",
+        "SMART_SEARCH_RESEARCH_DISABLED_PROVIDERS",
         "EXA_API_KEY",
         "EXA_BASE_URL",
         "EXA_TIMEOUT_SECONDS",
@@ -41,6 +43,15 @@ class Config:
         "ZHIPU_API_URL",
         "ZHIPU_SEARCH_ENGINE",
         "ZHIPU_TIMEOUT_SECONDS",
+        "ZHIPU_MCP_API_KEY",
+        "ZHIPU_MCP_SEARCH_API_URL",
+        "ZHIPU_MCP_READER_API_URL",
+        "ZHIPU_MCP_ZREAD_API_URL",
+        "ZHIPU_MCP_TIMEOUT_SECONDS",
+        "JINA_API_KEY",
+        "JINA_READER_API_URL",
+        "JINA_RESPOND_WITH",
+        "JINA_TIMEOUT_SECONDS",
         "TAVILY_API_KEY",
         "TAVILY_API_URL",
         "TAVILY_ENABLED",
@@ -372,6 +383,25 @@ class Config:
             self._ALLOWED_MINIMUM_PROFILES,
         )
 
+    def _csv_values(self, key: str) -> list[str]:
+        raw = self._get_config_value(key, "") or ""
+        values: list[str] = []
+        seen: set[str] = set()
+        for item in raw.split(","):
+            value = item.strip().lower()
+            if value and value not in seen:
+                seen.add(value)
+                values.append(value)
+        return values
+
+    @property
+    def research_preferred_providers(self) -> list[str]:
+        return self._csv_values("SMART_SEARCH_RESEARCH_PREFERRED_PROVIDERS")
+
+    @property
+    def research_disabled_providers(self) -> list[str]:
+        return self._csv_values("SMART_SEARCH_RESEARCH_DISABLED_PROVIDERS")
+
     @property
     def tavily_enabled(self) -> bool:
         return (self._get_config_value("TAVILY_ENABLED", "true") or "true").lower() in ("true", "1", "yes")
@@ -498,6 +528,51 @@ class Config:
     def zhipu_timeout(self) -> float:
         return float(self._get_config_value("ZHIPU_TIMEOUT_SECONDS", "30") or "30")
 
+    @property
+    def zhipu_mcp_api_key(self) -> str | None:
+        return self._get_config_value("ZHIPU_MCP_API_KEY")
+
+    @property
+    def zhipu_mcp_search_api_url(self) -> str:
+        return self._get_config_value(
+            "ZHIPU_MCP_SEARCH_API_URL",
+            "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp",
+        ) or "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp"
+
+    @property
+    def zhipu_mcp_reader_api_url(self) -> str:
+        return self._get_config_value(
+            "ZHIPU_MCP_READER_API_URL",
+            "https://open.bigmodel.cn/api/mcp/web_reader/mcp",
+        ) or "https://open.bigmodel.cn/api/mcp/web_reader/mcp"
+
+    @property
+    def zhipu_mcp_zread_api_url(self) -> str:
+        return self._get_config_value(
+            "ZHIPU_MCP_ZREAD_API_URL",
+            "https://open.bigmodel.cn/api/mcp/zread/mcp",
+        ) or "https://open.bigmodel.cn/api/mcp/zread/mcp"
+
+    @property
+    def zhipu_mcp_timeout(self) -> float:
+        return float(self._get_config_value("ZHIPU_MCP_TIMEOUT_SECONDS", "30") or "30")
+
+    @property
+    def jina_api_key(self) -> str | None:
+        return self._get_config_value("JINA_API_KEY")
+
+    @property
+    def jina_reader_api_url(self) -> str:
+        return self._get_config_value("JINA_READER_API_URL", "https://r.jina.ai") or "https://r.jina.ai"
+
+    @property
+    def jina_respond_with(self) -> str:
+        return self._get_config_value("JINA_RESPOND_WITH", "") or ""
+
+    @property
+    def jina_timeout(self) -> float:
+        return float(self._get_config_value("JINA_TIMEOUT_SECONDS", "30") or "30")
+
     def get_config_info(self) -> dict:
         config_parameter_errors: list[str] = []
         explicit_main_configured = bool(
@@ -540,6 +615,8 @@ class Config:
             "SMART_SEARCH_VALIDATION_LEVEL": validation_level,
             "SMART_SEARCH_FALLBACK_MODE": fallback_mode,
             "SMART_SEARCH_MINIMUM_PROFILE": minimum_profile,
+            "SMART_SEARCH_RESEARCH_PREFERRED_PROVIDERS": ",".join(self.research_preferred_providers),
+            "SMART_SEARCH_RESEARCH_DISABLED_PROVIDERS": ",".join(self.research_disabled_providers),
             "SMART_SEARCH_DEBUG": self.debug_enabled,
             "SMART_SEARCH_LOG_LEVEL": self.log_level,
             "SMART_SEARCH_LOG_DIR": self.log_dir_config_value,
@@ -568,6 +645,15 @@ class Config:
             "ZHIPU_API_URL": self.zhipu_api_url,
             "ZHIPU_SEARCH_ENGINE": self.zhipu_search_engine,
             "ZHIPU_TIMEOUT_SECONDS": self.zhipu_timeout,
+            "ZHIPU_MCP_API_KEY": self._mask_api_key(self.zhipu_mcp_api_key) if self.zhipu_mcp_api_key else "未配置",
+            "ZHIPU_MCP_SEARCH_API_URL": self.zhipu_mcp_search_api_url,
+            "ZHIPU_MCP_READER_API_URL": self.zhipu_mcp_reader_api_url,
+            "ZHIPU_MCP_ZREAD_API_URL": self.zhipu_mcp_zread_api_url,
+            "ZHIPU_MCP_TIMEOUT_SECONDS": self.zhipu_mcp_timeout,
+            "JINA_API_KEY": self._mask_api_key(self.jina_api_key) if self.jina_api_key else "未配置",
+            "JINA_READER_API_URL": self.jina_reader_api_url,
+            "JINA_RESPOND_WITH": self.jina_respond_with,
+            "JINA_TIMEOUT_SECONDS": self.jina_timeout,
             "primary_api_mode": "xai-responses" if self.xai_api_key else ("chat-completions" if self.openai_compatible_api_url and self.openai_compatible_api_key else "未配置"),
             "primary_api_mode_source": "config_file" if explicit_main_configured else "default",
             "config_file": str(self.config_file),

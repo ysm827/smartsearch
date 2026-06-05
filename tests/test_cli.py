@@ -53,6 +53,11 @@ def test_each_subcommand_help_exits_successfully(capsys):
         ["exa-search", "--help"],
         ["exa-similar", "--help"],
         ["zhipu-search", "--help"],
+        ["zhipu-mcp-search", "--help"],
+        ["zhipu-mcp-reader", "--help"],
+        ["zhipu-mcp-search-doc", "--help"],
+        ["zhipu-mcp-repo-structure", "--help"],
+        ["zhipu-mcp-read-file", "--help"],
         ["anysearch-domains", "--help"],
         ["anysearch-search", "--help"],
         ["anysearch-extract", "--help"],
@@ -102,6 +107,11 @@ def test_command_aliases_parse_to_canonical_commands():
         (["xs", "https://example.com"], "exa-similar"),
         (["z", "query"], "zhipu-search"),
         (["zp", "query"], "zhipu-search"),
+        (["zmcp-search", "query"], "zhipu-mcp-search"),
+        (["zmcp-reader", "https://example.com"], "zhipu-mcp-reader"),
+        (["zmcp-doc", "owner/repo", "install"], "zhipu-mcp-search-doc"),
+        (["zmcp-tree", "owner/repo"], "zhipu-mcp-repo-structure"),
+        (["zmcp-file", "owner/repo", "README.md"], "zhipu-mcp-read-file"),
         (["as-domains"], "anysearch-domains"),
         (["as-search", "query"], "anysearch-search"),
         (["as", "query"], "anysearch-search"),
@@ -356,7 +366,7 @@ def test_doctor_markdown_outputs_human_health_report(monkeypatch, capsys):
             "capability_status": {
                 "main_search": {"ok": True, "configured": ["openai-compatible"], "fallback_chain": ["xai-responses", "openai-compatible"]},
                 "docs_search": {"ok": True, "configured": ["context7"], "fallback_chain": ["context7", "exa"]},
-                "web_fetch": {"ok": True, "configured": ["tavily"], "fallback_chain": ["tavily", "firecrawl"]},
+                "web_fetch": {"ok": True, "configured": ["tavily", "jina"], "fallback_chain": ["tavily", "jina", "zhipu-mcp-reader", "firecrawl"]},
             },
             "main_search_connection_tests": {
                 "openai-compatible": {
@@ -370,8 +380,10 @@ def test_doctor_markdown_outputs_human_health_report(monkeypatch, capsys):
             },
             "exa_connection_test": {"status": "ok", "message": "Exa ok", "response_time_ms": 11.1},
             "tavily_connection_test": {"status": "ok", "message": "Tavily ok", "response_time_ms": 22.2},
+            "jina_connection_test": {"status": "ok", "message": "Jina ok", "response_time_ms": 10.0},
             "firecrawl_connection_test": {"status": "configured", "message": "key configured"},
             "zhipu_connection_test": {"status": "warning", "message": "HTTP 429"},
+            "zhipu_mcp_connection_test": {"status": "not_configured", "message": "missing"},
             "context7_connection_test": {"status": "not_configured", "message": "missing"},
         }
 
@@ -543,6 +555,77 @@ def test_deep_alias_and_markdown_output(monkeypatch, capsys):
     assert "# Deep Research Plan" in out
     assert "React useEffect 最新文档" in out
     assert "smart-search fetch" in out
+
+
+def test_research_command_uses_service_and_outputs_json(monkeypatch, capsys, tmp_path):
+    captured = {}
+
+    async def fake_research(query, budget="deep", evidence_dir="", fallback="auto"):
+        captured.update({"query": query, "budget": budget, "evidence_dir": evidence_dir, "fallback": fallback})
+        return {
+            "ok": True,
+            "mode": "deep_research_execution",
+            "query_mode": "research",
+            "question": query,
+            "final_answer": "Evidence answer",
+            "content": "Evidence answer",
+            "citations": [{"url": "https://example.com", "title": "Example", "provider": "jina"}],
+            "evidence_items": [{"url": "https://example.com", "provider": "jina", "content": "Evidence"}],
+            "gap_check": {"status": "closed", "gaps": []},
+            "provider_attempts": [],
+            "fallback_used": False,
+            "degraded": False,
+            "route_policy_version": "research-router-v1",
+            "evidence_dir": evidence_dir,
+        }
+
+    monkeypatch.setattr(cli.service, "research", fake_research)
+
+    code = cli.main([
+        "research",
+        "React docs",
+        "--budget",
+        "standard",
+        "--evidence-dir",
+        str(tmp_path),
+        "--fallback",
+        "off",
+        "--format",
+        "json",
+    ])
+
+    assert code == cli.EXIT_OK
+    data = json.loads(capsys.readouterr().out)
+    assert captured == {"query": "React docs", "budget": "standard", "evidence_dir": str(tmp_path), "fallback": "off"}
+    assert data["query_mode"] == "research"
+    assert data["final_answer"] == "Evidence answer"
+
+
+def test_research_markdown_and_content_output(monkeypatch, capsys):
+    async def fake_research(query, budget="deep", evidence_dir="", fallback="auto"):
+        return {
+            "ok": True,
+            "question": query,
+            "final_answer": "Evidence answer",
+            "content": "Evidence answer",
+            "citations": [{"url": "https://example.com", "title": "Example", "provider": "jina"}],
+            "gap_check": {"gaps": []},
+            "fallback_used": True,
+            "degraded": False,
+            "route_policy_version": "research-router-v1",
+            "evidence_dir": "C:/tmp/evidence",
+        }
+
+    monkeypatch.setattr(cli.service, "research", fake_research)
+
+    assert cli.main(["rs", "React docs", "--format", "markdown"]) == cli.EXIT_OK
+    markdown = capsys.readouterr().out
+    assert "# Research Report" in markdown
+    assert "Evidence answer" in markdown
+    assert "https://example.com" in markdown
+
+    assert cli.main(["research", "React docs", "--format", "content"]) == cli.EXIT_OK
+    assert capsys.readouterr().out == "Evidence answer\n"
 
 
 def test_exa_search_passes_powershell_split_domains(monkeypatch, capsys):
@@ -989,6 +1072,12 @@ def test_provider_markdown_outputs_result_lists(monkeypatch, capsys):
     async def fake_zhipu_search(*args, **kwargs):
         return {"ok": True, "query": "news", "provider": "zhipu", "results": [{"title": "News", "url": "https://news.example.com", "description": "desc"}]}
 
+    async def fake_zhipu_mcp_search(*args, **kwargs):
+        return {"ok": True, "query": "news", "provider": "zhipu-mcp", "tool": "web_search_prime", "results": [{"title": "MCP News", "url": "https://mcp.example.com"}]}
+
+    async def fake_zhipu_mcp_reader(*args, **kwargs):
+        return {"ok": True, "url": "https://source.example.com", "provider": "zhipu-mcp-reader", "tool": "webReader", "content": "# MCP Page"}
+
     async def fake_context7_library(*args, **kwargs):
         return {"ok": True, "query": "react", "provider": "context7", "results": [{"id": "/facebook/react", "title": "React", "description": "docs"}]}
 
@@ -998,6 +1087,8 @@ def test_provider_markdown_outputs_result_lists(monkeypatch, capsys):
     monkeypatch.setattr(cli.service, "exa_search", fake_exa_search)
     monkeypatch.setattr(cli.service, "exa_find_similar", fake_exa_similar)
     monkeypatch.setattr(cli.service, "zhipu_search", fake_zhipu_search)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_search", fake_zhipu_mcp_search)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_reader", fake_zhipu_mcp_reader)
     monkeypatch.setattr(cli.service, "context7_library", fake_context7_library)
     monkeypatch.setattr(cli.service, "map_site", fake_map_site)
 
@@ -1005,6 +1096,8 @@ def test_provider_markdown_outputs_result_lists(monkeypatch, capsys):
         (["exa-search", "query", "--format", "markdown"], "Example", "https://example.com"),
         (["exa-similar", "https://source.example.com", "--format", "markdown"], "Similar", "https://similar.example.com"),
         (["zhipu-search", "news", "--format", "markdown"], "News", "https://news.example.com"),
+        (["zhipu-mcp-search", "news", "--format", "markdown"], "MCP News", "https://mcp.example.com"),
+        (["zhipu-mcp-reader", "https://source.example.com", "--format", "markdown"], "MCP Page", "Zhipu Coding Plan MCP Reader"),
         (["context7-library", "react", "--format", "markdown"], "React", "/facebook/react"),
         (["map", "https://docs.example.com", "--format", "markdown"], "https://docs.example.com/api", "Site Map"),
     ]
@@ -1059,6 +1152,12 @@ def test_all_formatted_commands_have_non_json_markdown(monkeypatch):
     async def fake_zhipu(*args, **kwargs):
         return {"ok": True, "results": [{"title": "News", "url": "https://news.example.com"}]}
 
+    async def fake_zhipu_mcp(*args, **kwargs):
+        return {"ok": True, "provider": "zhipu-mcp", "tool": "web_search_prime", "results": [{"title": "MCP", "url": "https://mcp.example.com"}]}
+
+    async def fake_zhipu_mcp_reader(*args, **kwargs):
+        return {"ok": True, "provider": "zhipu-mcp-reader", "tool": "webReader", "content": "MCP Page"}
+
     async def fake_c7_library(*args, **kwargs):
         return {"ok": True, "results": [{"id": "/lib", "title": "Library"}]}
 
@@ -1070,6 +1169,9 @@ def test_all_formatted_commands_have_non_json_markdown(monkeypatch):
 
     async def fake_smoke(mode="mock"):
         return {"ok": True, "mode": mode, "failed_cases": [], "cases": [{"name": "case", "ok": True}]}
+
+    async def fake_research(query, budget="deep", evidence_dir="", fallback="auto"):
+        return {"ok": True, "question": query, "content": "Research", "final_answer": "Research", "citations": [], "gap_check": {"gaps": []}}
 
     def fake_plan(*args, **kwargs):
         return {"ok": True, "mode": "deep_research", "question": "q", "difficulty": "standard", "evidence_policy": "fetch_before_claim"}
@@ -1098,10 +1200,16 @@ def test_all_formatted_commands_have_non_json_markdown(monkeypatch):
     monkeypatch.setattr(cli.service, "exa_search", fake_exa)
     monkeypatch.setattr(cli.service, "exa_find_similar", fake_exa)
     monkeypatch.setattr(cli.service, "zhipu_search", fake_zhipu)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_search", fake_zhipu_mcp)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_reader", fake_zhipu_mcp_reader)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_search_doc", fake_zhipu_mcp)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_repo_structure", fake_zhipu_mcp)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_read_file", fake_zhipu_mcp)
     monkeypatch.setattr(cli.service, "context7_library", fake_c7_library)
     monkeypatch.setattr(cli.service, "context7_docs", fake_c7_docs)
     monkeypatch.setattr(cli.service, "doctor", fake_doctor)
     monkeypatch.setattr(cli.service, "smoke", fake_smoke)
+    monkeypatch.setattr(cli.service, "research", fake_research)
     monkeypatch.setattr(cli.service, "build_deep_research_plan", fake_plan)
     monkeypatch.setattr(cli.service, "config_path", fake_config_path)
     monkeypatch.setattr(cli.service, "config_list", fake_config_list)
@@ -1117,9 +1225,15 @@ def test_all_formatted_commands_have_non_json_markdown(monkeypatch):
         ("exa-search", ["exa-search", "query", "--format", "markdown"]),
         ("exa-similar", ["exa-similar", "https://example.com", "--format", "markdown"]),
         ("zhipu-search", ["zhipu-search", "query", "--format", "markdown"]),
+        ("zhipu-mcp-search", ["zhipu-mcp-search", "query", "--format", "markdown"]),
+        ("zhipu-mcp-reader", ["zhipu-mcp-reader", "https://example.com", "--format", "markdown"]),
+        ("zhipu-mcp-search-doc", ["zhipu-mcp-search-doc", "owner/repo", "install", "--format", "markdown"]),
+        ("zhipu-mcp-repo-structure", ["zhipu-mcp-repo-structure", "owner/repo", "--format", "markdown"]),
+        ("zhipu-mcp-read-file", ["zhipu-mcp-read-file", "owner/repo", "README.md", "--format", "markdown"]),
         ("context7-library", ["context7-library", "react", "--format", "markdown"]),
         ("context7-docs", ["context7-docs", "/lib", "hooks", "--format", "markdown"]),
         ("deep", ["deep", "query", "--format", "markdown"]),
+        ("research", ["research", "query", "--format", "markdown"]),
         ("smoke", ["smoke", "--format", "markdown"]),
         ("doctor", ["doctor", "--format", "markdown"]),
         ("diagnose", ["diagnose", "openai-compatible", "--format", "markdown"]),
@@ -1141,9 +1255,15 @@ def test_all_formatted_commands_have_non_json_markdown(monkeypatch):
             "exa-search": {"ok": True, "results": [{"title": "Example", "url": "https://example.com"}]},
             "exa-similar": {"ok": True, "results": [{"title": "Example", "url": "https://example.com"}]},
             "zhipu-search": {"ok": True, "results": [{"title": "News", "url": "https://news.example.com"}]},
+            "zhipu-mcp-search": {"ok": True, "provider": "zhipu-mcp", "tool": "web_search_prime", "results": [{"title": "MCP", "url": "https://mcp.example.com"}]},
+            "zhipu-mcp-reader": {"ok": True, "provider": "zhipu-mcp-reader", "tool": "webReader", "content": "MCP Page"},
+            "zhipu-mcp-search-doc": {"ok": True, "provider": "zhipu-mcp-zread", "tool": "search_doc", "results": [{"title": "Doc", "url": "https://docs.example.com"}]},
+            "zhipu-mcp-repo-structure": {"ok": True, "provider": "zhipu-mcp-zread", "tool": "get_repo_structure", "content": "tree"},
+            "zhipu-mcp-read-file": {"ok": True, "provider": "zhipu-mcp-zread", "tool": "read_file", "content": "file"},
             "context7-library": {"ok": True, "results": [{"id": "/lib", "title": "Library"}]},
             "context7-docs": {"ok": True, "library_id": "/lib", "query": "hooks", "content": "Docs"},
             "deep": {"ok": True, "mode": "deep_research", "question": "q", "difficulty": "standard", "evidence_policy": "fetch_before_claim"},
+            "research": {"ok": True, "question": "q", "content": "Research", "final_answer": "Research", "citations": [], "gap_check": {"gaps": []}},
             "smoke": {"ok": True, "mode": "mock", "failed_cases": [], "cases": [{"name": "case", "ok": True}]},
             "doctor": {"ok": True, "config_status": "ok", "minimum_profile_ok": True},
             "diagnose": {"ok": True, "provider": "openai-compatible", "summary": "ok", "recommendation": "none"},
@@ -1255,6 +1375,24 @@ def test_setup_non_interactive_saves_values(monkeypatch, capsys):
         "zhipu.example.com/api",
         "--zhipu-search-engine",
         "search_pro",
+        "--zhipu-mcp-key",
+        "zmcp-secret",
+        "--zhipu-mcp-search-api-url",
+        "https://zmcp.example.com/search",
+        "--zhipu-mcp-reader-api-url",
+        "https://zmcp.example.com/reader",
+        "--zhipu-mcp-zread-api-url",
+        "https://zmcp.example.com/zread",
+        "--zhipu-mcp-timeout",
+        "8",
+        "--jina-key",
+        "jina-secret",
+        "--jina-reader-api-url",
+        "r.jina.ai",
+        "--jina-respond-with",
+        "readerlm-v2",
+        "--jina-timeout",
+        "10",
         "--context7-key",
         "ctx-secret",
         "--tavily-api-url",
@@ -1288,6 +1426,15 @@ def test_setup_non_interactive_saves_values(monkeypatch, capsys):
     assert saved["ZHIPU_API_KEY"] == "zhipu-secret"
     assert saved["ZHIPU_API_URL"] == "https://zhipu.example.com/api"
     assert saved["ZHIPU_SEARCH_ENGINE"] == "search_pro"
+    assert saved["ZHIPU_MCP_API_KEY"] == "zmcp-secret"
+    assert saved["ZHIPU_MCP_SEARCH_API_URL"] == "https://zmcp.example.com/search"
+    assert saved["ZHIPU_MCP_READER_API_URL"] == "https://zmcp.example.com/reader"
+    assert saved["ZHIPU_MCP_ZREAD_API_URL"] == "https://zmcp.example.com/zread"
+    assert saved["ZHIPU_MCP_TIMEOUT_SECONDS"] == "8"
+    assert saved["JINA_API_KEY"] == "jina-secret"
+    assert saved["JINA_READER_API_URL"] == "https://r.jina.ai"
+    assert saved["JINA_RESPOND_WITH"] == "readerlm-v2"
+    assert saved["JINA_TIMEOUT_SECONDS"] == "10"
     assert saved["CONTEXT7_API_KEY"] == "ctx-secret"
     assert saved["TAVILY_API_URL"] == "https://pool.example.com/api/tavily"
     assert saved["TAVILY_API_KEY"] == "th-test-secret"
@@ -1298,6 +1445,8 @@ def test_setup_non_interactive_saves_values(monkeypatch, capsys):
     assert saved["ANYSEARCH_TIMEOUT_SECONDS"] == "9"
     assert "xai-test-secret" not in out
     assert "th-test-secret" not in out
+    assert "jina-secret" not in out
+    assert "zmcp-secret" not in out
     assert "as-test-secret" not in out
 
 
@@ -1846,6 +1995,9 @@ def test_smoke_command_uses_service(monkeypatch, capsys):
     async def fake_smoke(mode="mock"):
         return {"ok": True, "mode": mode, "failed_cases": [], "cases": []}
 
+    async def fake_research(*args, **kwargs):
+        return {"ok": True, "query_mode": "research", "content": "Research"}
+
     monkeypatch.setattr(cli.service, "smoke", fake_smoke)
 
     code = cli.main(["smoke", "--mode", "mock"])
@@ -1895,6 +2047,55 @@ def test_anysearch_commands_use_service_wrappers(monkeypatch, capsys):
     ]
 
 
+def test_zhipu_mcp_commands_use_service_wrappers(monkeypatch, capsys):
+    calls = []
+
+    async def fake_search(query, count=5):
+        calls.append(("search", query, count))
+        return {"ok": True, "provider": "zhipu-mcp", "tool": "web_search_prime", "results": []}
+
+    async def fake_reader(url):
+        calls.append(("reader", url))
+        return {"ok": True, "provider": "zhipu-mcp-reader", "tool": "webReader", "content": "# Page"}
+
+    async def fake_search_doc(repo, query, max_results=5):
+        calls.append(("search_doc", repo, query, max_results))
+        return {"ok": True, "provider": "zhipu-mcp-zread", "tool": "search_doc", "results": []}
+
+    async def fake_repo_structure(repo, ref=""):
+        calls.append(("repo_structure", repo, ref))
+        return {"ok": True, "provider": "zhipu-mcp-zread", "tool": "get_repo_structure", "content": "tree"}
+
+    async def fake_read_file(repo, path, ref=""):
+        calls.append(("read_file", repo, path, ref))
+        return {"ok": True, "provider": "zhipu-mcp-zread", "tool": "read_file", "content": "file"}
+
+    monkeypatch.setattr(cli.service, "zhipu_mcp_search", fake_search)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_reader", fake_reader)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_search_doc", fake_search_doc)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_repo_structure", fake_repo_structure)
+    monkeypatch.setattr(cli.service, "zhipu_mcp_read_file", fake_read_file)
+
+    assert cli.main(["zhipu-mcp-search", "news", "--count", "2"]) == cli.EXIT_OK
+    assert json.loads(capsys.readouterr().out)["tool"] == "web_search_prime"
+    assert cli.main(["zmcp-reader", "https://example.com"]) == cli.EXIT_OK
+    assert json.loads(capsys.readouterr().out)["tool"] == "webReader"
+    assert cli.main(["zmcp-doc", "owner/repo", "install", "--max-results", "3"]) == cli.EXIT_OK
+    assert json.loads(capsys.readouterr().out)["tool"] == "search_doc"
+    assert cli.main(["zmcp-tree", "owner/repo", "--ref", "main"]) == cli.EXIT_OK
+    assert json.loads(capsys.readouterr().out)["tool"] == "get_repo_structure"
+    assert cli.main(["zmcp-file", "owner/repo", "README.md", "--ref", "main"]) == cli.EXIT_OK
+    assert json.loads(capsys.readouterr().out)["tool"] == "read_file"
+
+    assert calls == [
+        ("search", "news", 2),
+        ("reader", "https://example.com"),
+        ("search_doc", "owner/repo", "install", 3),
+        ("repo_structure", "owner/repo", "main"),
+        ("read_file", "owner/repo", "README.md", "main"),
+    ]
+
+
 def test_provider_and_smoke_aliases_use_canonical_commands(monkeypatch, capsys):
     async def fake_exa_search(*args, **kwargs):
         return {"ok": True, "provider": "exa"}
@@ -1923,6 +2124,9 @@ def test_provider_and_smoke_aliases_use_canonical_commands(monkeypatch, capsys):
     async def fake_smoke(mode="mock"):
         return {"ok": True, "mode": mode, "failed_cases": [], "cases": []}
 
+    async def fake_research(*args, **kwargs):
+        return {"ok": True, "query_mode": "research", "content": "Research"}
+
     monkeypatch.setattr(cli.service, "exa_search", fake_exa_search)
     monkeypatch.setattr(cli.service, "zhipu_search", fake_zhipu_search)
     monkeypatch.setattr(cli.service, "context7_library", fake_context7_library)
@@ -1932,6 +2136,7 @@ def test_provider_and_smoke_aliases_use_canonical_commands(monkeypatch, capsys):
     monkeypatch.setattr(cli.service, "anysearch_extract", fake_anysearch_extract)
     monkeypatch.setattr(cli.service, "anysearch_batch", fake_anysearch_batch)
     monkeypatch.setattr(cli.service, "smoke", fake_smoke)
+    monkeypatch.setattr(cli.service, "research", fake_research)
 
     assert cli.main(["exa", "query"]) == cli.EXIT_OK
     assert json.loads(capsys.readouterr().out)["provider"] == "exa"
@@ -1949,6 +2154,8 @@ def test_provider_and_smoke_aliases_use_canonical_commands(monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)["provider"] == "context7-library"
     assert cli.main(["c7docs", "/facebook/react", "hooks"]) == cli.EXIT_OK
     assert json.loads(capsys.readouterr().out)["provider"] == "context7-docs"
+    assert cli.main(["rs", "query"]) == cli.EXIT_OK
+    assert json.loads(capsys.readouterr().out)["query_mode"] == "research"
     assert cli.main(["sm"]) == cli.EXIT_OK
     assert json.loads(capsys.readouterr().out)["mode"] == "mock"
 

@@ -184,7 +184,10 @@ Added direct content output, balanced realtime sports web reinforcement, package
 
 ### Main Changes
 
-(Add details)
+- Implemented Jina Reader as controlled `web_fetch` only: key-required for the standard minimum profile, ReaderLM-v2 fail-closed without key, challenge/empty/error filtering, and same-capability fallback.
+- Implemented separate Zhipu Coding Plan Remote MCP provider paths for `webSearchPrime`, `webReader`, and zread repo/docs discovery tools without mixing them into the existing Zhipu REST Web Search provider.
+- Updated setup/config, doctor/status, public and packaged skill docs, README files, provider-capability spec, and unit/regression tests.
+- Captured the async wrapper gotcha where provider JSON decoders must be awaited before returning from service-level wrappers.
 
 ### Git Commits
 
@@ -195,7 +198,13 @@ Added direct content output, balanced realtime sports web reinforcement, package
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `.venv\Scripts\python.exe -m pytest tests -q` -> 257 passed.
+- [OK] `.venv\Scripts\python.exe -m smart_search.cli regression` -> 195 passed.
+- [OK] `.venv\Scripts\python.exe -m smart_search.cli smoke --mock --format json` -> `ok: true`.
+- [OK] `python -m compileall -q src tests`.
+- [OK] `git diff --check` with line-ending warnings only.
+- [OK] `npm pack --dry-run` included Jina/Zhipu MCP provider files and bundled skill assets.
+- [OK] Secret scan found no real Jina key in the repository.
 
 ### Status
 
@@ -603,6 +612,110 @@ Added a beginner-facing diagnose openai-compatible command, enhanced search time
 | Hash | Message |
 |------|---------|
 | `a62efcc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 17: Jina and Zhipu MCP provider beta
+
+**Date**: 2026-06-06
+**Task**: Jina and Zhipu MCP provider beta
+**Branch**: `codex/update-anysearch-readme-links`
+
+### Summary
+
+Added controlled Jina web_fetch support and separate Zhipu Coding Plan Remote MCP providers; updated setup/config/docs/skills/spec/tests; source validation passed with pytest, regression, mock smoke, compileall, diff check, secret scan, and npm dry-run.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b19d00c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 18: Research router and fallback
+
+**Date**: 2026-06-06
+**Task**: Research router and fallback
+**Branch**: `codex/update-anysearch-readme-links`
+
+### Summary
+
+Added the live research executor with capability-first provider-advantage routing, same-capability fallback, safe research provider overrides, evidence-only synthesis, synchronized docs/skills/provider contract, and completed full unit, regression, mock smoke, live doctor, live research, and live smoke verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6798283` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 19: Research router Jina and Zhipu MCP beta closeout
+
+**Date**: 2026-06-06
+**Task**: Research router Jina and Zhipu MCP beta closeout
+**Branch**: `codex/update-anysearch-readme-links`
+
+### Summary
+
+Closed out the beta provider work: Jina fetch-only support, Zhipu Coding Plan MCP schema/error handling, live research router and same-capability fallback, provider-boundary documentation, Jina capability probe script, and release notes for 0.1.14-beta.2.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b19d00c` | (see git log) |
+| `539cb0e` | (see git log) |
+| `6798283` | (see git log) |
+| `205c7a6` | (see git log) |
+| `d01814c` | (see git log) |
+| `c775043` | (see git log) |
 
 ### Testing
 
