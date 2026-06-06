@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
-- **Last Active**: 2026-06-06
+- **Total Sessions**: 20
+- **Last Active**: 2026-06-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~730 | Active |
+| `journal-1.md` | ~763 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-06-07 | Embedding router calibration preset release | `f283c76` | `main` |
 | 19 | 2026-06-06 | Research router Jina and Zhipu MCP beta closeout | `b19d00c`, `539cb0e`, `6798283`, `205c7a6`, `d01814c`, `c775043` | `codex/update-anysearch-readme-links` |
 | 18 | 2026-06-06 | Research router and fallback | `6798283` | `codex/update-anysearch-readme-links` |
 | 17 | 2026-06-06 | Jina and Zhipu MCP provider beta | `b19d00c` | `codex/update-anysearch-readme-links` |

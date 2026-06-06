@@ -728,3 +728,50 @@ Closed out the beta provider work: Jina fetch-only support, Zhipu Coding Plan MC
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: Embedding router calibration preset release
+
+**Date**: 2026-06-07
+**Task**: Embedding router calibration preset release
+**Branch**: `main`
+
+### Summary
+
+Added route-calibrate and model-aware embedding threshold/margin routing, standardized Qwen3-Embedding-8B setup preset, published 0.1.14-beta.5, synced local CLI and managed skills, and verified installed runtime.
+
+### Main Changes
+
+- Implemented `route-calibrate` and model-aware semantic threshold/margin routing.
+- Added the Qwen3-Embedding-8B setup preset: SiliconFlow endpoint, model, threshold `0.475`, margin `0.053`.
+- Updated `setup`, `doctor`, and `route` so 8B users get preset values or clear configuration recommendations without leaking keys.
+- Synced README, Chinese README, public skill, packaged skill, and backend provider capability spec.
+- Published npm `next=0.1.14-beta.5` from commit `f283c76`, then installed and pinned it locally through mise.
+- Updated all managed local `smart-search-cli` skill targets and verified the installed hashes were up to date.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f283c76` | (see git log) |
+
+### Testing
+
+- [OK] `.venv\Scripts\python.exe -m pytest tests -q` -> 299 passed
+- [OK] `.venv\Scripts\python.exe -m smart_search.cli regression` -> 237 passed
+- [OK] `.venv\Scripts\python.exe -m smart_search.cli smoke --mock --format json`
+- [OK] `.venv\Scripts\python.exe -m compileall -q src tests`
+- [OK] `git diff --check`
+- [OK] GitHub Actions publish run `27068473025` published `@konbakuyomu/smart-search@0.1.14-beta.5` with npm dist-tag `next`
+- [OK] Installed runtime: `smart-search --version` -> `smart-search 0.1.14b5`
+- [OK] `smart-search skills update --all --format json` installed 15 targets; `skills status --all` showed all up to date
+- [OK] Installed runtime `smart-search regression` and `smart-search smoke --mock --format json`
+- [OK] Local 8B config set: `INTENT_EMBEDDING_THRESHOLD=0.475`, `INTENT_EMBEDDING_MARGIN=0.053`; `doctor` and `route` reported `config_file` sources and no preset recommendation warning
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
